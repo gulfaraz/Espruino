@@ -68,8 +68,6 @@ typedef long long int64_t;
 static void scanCB(void *arg, STATUS status);
 static void wifiEventHandler(System_Event_t *event);
 static void pingRecvCB();
-static void startMDNS(char *hostname);
-static void stopMDNS();
 
 // Some common error handling
 
@@ -1505,35 +1503,117 @@ void jswrap_ESP8266_wifi_setHostname(
   wifi_station_dhcpc_start();
 
   // now update mDNS
-  startMDNS(hostname);
+  jswrap_ESP8266_wifi_startMDNS(jsvNewFromString("espruino"), jsvNewFromInteger(23), NULL, NULL);
 }
 
 //===== mDNS
 
 static bool mdns_started;
 
-void startMDNS(char *hostname) {
-  if (mdns_started) stopMDNS();
+/*JSON{
+  "type"     : "staticmethod",
+  "class"    : "Wifi",
+  "name"     : "startMDNS",
+  "generate" : "jswrap_ESP8266_wifi_startMDNS",
+  "params"   : [
+    ["serviceName", "JsVar", "Category name of service to broadcast"],
+    ["port", "JsVar", "Port to broadcast on"],
+    ["options", "JsVar", "mDNS configuration. Ex.) txtRecord"],
+    ["callback", "JsVar", "An optional function to be called back with the mDNS information, i.e. the same object as returned directly. The callback function is more portable than the direct return value."]
+  ]
+}
+Return the mDNS information in an object as follows:
+
+* serviceName - server type as string (e.g. "http")
+* port - The port number as integer
+* txtRecord - The txt record as object
+*/
+void jswrap_ESP8266_wifi_startMDNS(JsVar *jsServiceName, JsVar *jsPort, JsVar *jsOptions, JsVar *jsCallback) {
+  //if (mdns_started) jswrap_ESP8266_wifi_stopMDNS(NULL);
+
+  // Validate that the serviceName is provided and is a string.
+  if (!jsvIsString(jsServiceName)) {
+    jsExceptionHere(JSET_ERROR, "No Service Name provided");
+    return;
+  }
+
+  // Validate that the port is provided and is an integer.
+  if (!jsvIsInt(jsPort)) {
+    jsExceptionHere(JSET_ERROR, "Port information missing");
+    return;
+  }
+
+  // Make sure jsOptions is NULL or an object
+  if (jsOptions != NULL && !jsvIsObject(jsOptions)) {
+    EXPECT_OPT_EXCEPTION(jsOptions);
+    return;
+  }
+
+  // Check callback
+  if (jsCallback != NULL && !jsvIsUndefined(jsCallback) && !jsvIsFunction(jsCallback)) {
+    EXPECT_CB_EXCEPTION(jsCallback);
+    return;
+  }
 
   // find our IP address
   struct ip_info info;
   bool ok = wifi_get_ip_info(0, &info);
-  if (!ok || info.ip.addr == 0) return; // no IP address
+  if (!ok || info.ip.addr == 0) {
+    jsExceptionHere(JSET_ERROR, "No IP Address");
+    return; // no IP address
+  }
+
+  char serviceName[256];
+  jsvGetString(jsServiceName, serviceName, sizeof(serviceName));
+
+  int port = jsvGetInteger(jsPort);
 
   // start mDNS
   struct mdns_info *mdns_info = (struct mdns_info *)os_zalloc(sizeof(struct mdns_info));
-  mdns_info->host_name = hostname;
-  mdns_info->server_name = "espruino";
-  mdns_info->server_port = 23;
-  mdns_info->ipAddr = info.ip.addr;
-  espconn_mdns_init(mdns_info);
-  mdns_started = true;
+  char *hostname = wifi_station_get_hostname();
+  if (hostname && hostname[0] != 0) {
+    mdns_info->host_name = hostname;
+    mdns_info->server_name = serviceName;
+    mdns_info->server_port = port;
+    mdns_info->ipAddr = info.ip.addr;
+    mdns_info->txt_data[0] = (char *) "testing=true";
+    espconn_mdns_init(mdns_info);
+    espconn_mdns_server_register();
+    mdns_started = true;
+  } else {
+    jsExceptionHere(JSET_ERROR, "Could not get hostname");
+    return;
+  }
+
+  JsVar *params[1];
+  params[0] = jsvNewFromString(serviceName);
+
+  if (jsvIsFunction(jsCallback)) {
+    jsiQueueEvents(NULL, jsCallback, params, 1);
+  }
+
+  return;
 }
 
-void stopMDNS() {
+/*JSON{
+  "type"     : "staticmethod",
+  "class"    : "Wifi",
+  "name"     : "stopMDNS",
+  "generate" : "jswrap_ESP8266_wifi_stopMDNS",
+  "params"   : [
+    ["callback", "JsVar", "(optional) Function to call on complete"]
+  ]
+}
+Stops the mDNS broadcast.
+*/
+void jswrap_ESP8266_wifi_stopMDNS(JsVar *jsCallback) {
   espconn_mdns_server_unregister();
   espconn_mdns_close();
   mdns_started = false;
+
+  if (jsvIsFunction(jsCallback)) {
+    jsiQueueEvents(NULL, jsCallback, NULL, 0);
+  }
 }
 
 //===== SNTP
@@ -2104,7 +2184,8 @@ static void wifiEventHandler(System_Event_t *evt) {
     // start mDNS
     char *hostname = wifi_station_get_hostname();
     if (hostname && hostname[0] != 0) {
-      startMDNS(hostname);
+      //startMDNS(hostname)
+      jswrap_ESP8266_wifi_startMDNS(jsvNewFromString("espruino"), jsvNewFromInteger(23), NULL, NULL);
     }
 
     // Make Wifi.connected() callback

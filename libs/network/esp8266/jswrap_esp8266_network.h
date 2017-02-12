@@ -33,6 +33,8 @@ void   jswrap_ESP8266_wifi_setConfig(JsVar *jsOptions);
 JsVar *jswrap_ESP8266_wifi_getDetails(JsVar *jsCallback);
 JsVar *jswrap_ESP8266_wifi_getAPDetails(JsVar *jsCallback);
 JsVar *jswrap_ESP8266_wifi_getIP(JsVar *jsCallback);
+void   jswrap_ESP8266_wifi_startMDNS(JsVar *jsServiceName, JsVar *jsPort, JsVar *jsOptions, JsVar *jsCallback);
+void   jswrap_ESP8266_wifi_stopMDNS(JsVar *jsCallback);
 JsVar *jswrap_ESP8266_wifi_getAPIP(JsVar *jsCallback);
 JsVar *jswrap_ESP8266_wifi_getHostname(JsVar *jsCallback);
 void   jswrap_ESP8266_wifi_setHostname(JsVar *jsHostname);
