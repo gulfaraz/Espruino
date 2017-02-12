@@ -1529,7 +1529,7 @@ Return the mDNS information in an object as follows:
 * txtRecord - The txt record as object
 */
 void jswrap_ESP8266_wifi_startMDNS(JsVar *jsServiceName, JsVar *jsPort, JsVar *jsOptions, JsVar *jsCallback) {
-  //if (mdns_started) jswrap_ESP8266_wifi_stopMDNS(NULL);
+  if (mdns_started) jswrap_ESP8266_wifi_stopMDNS(NULL);
 
   // Validate that the serviceName is provided and is a string.
   if (!jsvIsString(jsServiceName)) {
